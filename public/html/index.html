@@ -13,6 +13,7 @@
     <script>
       var scene, camera, controls, renderer;
       var points, pointField;
+      var spike, spikeList;
       var init = function () {
         //initialize scene
         scene = new THREE.Scene();
@@ -27,6 +28,50 @@
         //add renderer to the html page
         document.body.appendChild( renderer.domElement );
 
+        var hemLight = new THREE.HemisphereLight( 0x15fff8, 0x080820, 1 );
+        scene.add( hemLight );
+
+        var pointLight = new THREE.PointLight( 0xff0000, 1);
+        pointLight.position.set( 50, 50, 50 );
+        scene.add( pointLight );
+
+        spikeList = []
+
+        //generate a spike
+        var spikeGeometry = new THREE.Geometry();
+
+        //add vertex points
+        spikeGeometry.vertices.push(new THREE.Vector3(0,0,0))
+        spikeGeometry.vertices.push(new THREE.Vector3(0.2, 0.5, -0.1))
+        spikeGeometry.vertices.push(new THREE.Vector3(-0.2, 0.5, -0.1))
+        spikeGeometry.vertices.push(new THREE.Vector3(0.2, 0.5, -0.25))
+        spikeGeometry.vertices.push(new THREE.Vector3(-0.2, 0.5, -0.25))
+        spikeGeometry.vertices.push(new THREE.Vector3(0,1,0.))
+        spikeGeometry.vertices.push(new THREE.Vector3(0,0.5,-0.15))
+        spikeGeometry.vertices.push(new THREE.Vector3(0,0.5,-0.3))
+
+        //front faces
+        spikeGeometry.faces.push(new THREE.Face3(0,1,6))
+        spikeGeometry.faces.push(new THREE.Face3(0,6,2))
+        spikeGeometry.faces.push(new THREE.Face3(1,5,6))
+        spikeGeometry.faces.push(new THREE.Face3(5,2,6))
+
+        //side faces
+        spikeGeometry.faces.push(new THREE.Face3(0,2,4))
+        spikeGeometry.faces.push(new THREE.Face3(0,3,1))
+        spikeGeometry.faces.push(new THREE.Face3(5,1,3))
+        spikeGeometry.faces.push(new THREE.Face3(5,4,2))
+
+        //back faces
+        spikeGeometry.faces.push(new THREE.Face3(0,4,7))
+        spikeGeometry.faces.push(new THREE.Face3(0,7,3))
+        spikeGeometry.faces.push(new THREE.Face3(5,3,7))
+        spikeGeometry.faces.push(new THREE.Face3(5,7,4))
+
+        spikeGeometry.computeFaceNormals();
+        spikeGeometry.computeVertexNormals();
+        spikeGeometry.center();
+
         //lets first try just making points in a spiral pattern arround a spline
         //create the base curve
         var baseCurve = new THREE.CatmullRomCurve3( [
@@ -39,7 +84,7 @@
           new THREE.Vector3( 120, 0, 20 ),
         ] );
 
-        curvePoints = baseCurve.getPoints( 1000 );
+        curvePoints = baseCurve.getPoints( 700 );
 
         var curveHelperGeo = new THREE.Geometry();
         for ( var i = 0; i < curvePoints.length; i ++ ) {
@@ -74,7 +119,29 @@
           vertices[ 3 * i + 2 ] = displacement.z;
 
           //increment rotation value
-          radians += 0.3;
+          radians += 1.7;
+
+          //add spike and save to list
+          var tiltQuaternion = new THREE.Quaternion();
+          var perp = new THREE.Vector3().crossVectors(axis, dir).normalize()
+          tiltQuaternion.setFromAxisAngle( perp , -2.0 );
+
+          var spike = new THREE.Mesh(spikeGeometry, new THREE.MeshPhongMaterial());
+          //individual tilt rotation
+          spike.rotateY(-1.0)
+          spike.rotateZ(2.0)
+          spike.rotateY(-2.0)
+
+          var spikeScale = 10;
+          //set position to our skeleton point and scale
+          spike.position.set( displacement.x, displacement.y, displacement.z );
+          spike.scale.x = spikeScale;
+          spike.scale.y = spikeScale;
+          spike.scale.z = spikeScale;
+          //apply same rotation and extra tilt
+          spike.applyQuaternion( quaternion )
+          spike.applyQuaternion( tiltQuaternion );
+          spikeList.push(spike)
         }
         //add position attribute to the pointsGeometry
         pointsGeometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
@@ -94,13 +161,14 @@
         nEnd = Math.min( nEnd + nStep, nMax );
         //update draw range for animation
         pointField.geometry.setDrawRange(0, nEnd)
+        scene.add(spikeList[nEnd])
         requestAnimationFrame( animate );
         renderer.render(scene, camera);
       };
 
       init ();
       animate();
-      
+
     </script>
   </body>
 </html>
