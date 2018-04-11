@@ -1,0 +1,106 @@
+<html>
+  <head>
+    <title>three.js empty template</title>
+    <script src="js/THREE/three.min.js"></script>
+    <script src="js/THREE/OBJLoader.js"></script>
+    <script src="js/THREE/OrbitControls.js"></script>
+    <style>
+      body { margin: 0; }
+    </style>
+  </head>
+
+  <body>
+    <script>
+      var scene, camera, controls, renderer;
+      var points, pointField;
+      var init = function () {
+        //initialize scene
+        scene = new THREE.Scene();
+        //initialize camera
+        camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+        camera.position.z = 20;
+        //set up orbit controls on the camera
+        controls = new THREE.OrbitControls( camera );
+        //initialize renderer
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize( window.innerWidth, window.innerHeight );
+        //add renderer to the html page
+        document.body.appendChild( renderer.domElement );
+
+        //lets first try just making points in a spiral pattern arround a spline
+        //create the base curve
+        var baseCurve = new THREE.CatmullRomCurve3( [
+        	new THREE.Vector3( -20, 0, 10 ),
+        	new THREE.Vector3( 10, 0, 10 ),
+        	new THREE.Vector3( 40, 0, 20 ),
+          new THREE.Vector3( 50, 0, 10 ),
+          new THREE.Vector3( 80, 0, 20 ),
+          new THREE.Vector3( 100, 0, 10 ),
+          new THREE.Vector3( 120, 0, 20 ),
+        ] );
+
+        curvePoints = baseCurve.getPoints( 1000 );
+
+        var curveHelperGeo = new THREE.Geometry();
+        for ( var i = 0; i < curvePoints.length; i ++ ) {
+          curveHelperGeo.vertices.push( curvePoints[ i ] );
+        }
+
+        var curveHelperMaterial = new THREE.LineBasicMaterial( { color : 0xff0000 } );
+        var curveHelper = new THREE.Line( curveHelperGeo, curveHelperMaterial );
+        scene.add( curveHelper );
+
+        //rotate the curve points around the curve axis
+        var radians = 0.0;
+        var pointsGeometry = new THREE.BufferGeometry();
+        var vertices = new Float32Array( 3 * ( curvePoints.length - 2 ) );
+        for (var i = 0; i < curvePoints.length - 1; i ++ ) {
+          //axis is the vector between the adjacent curve points
+          var axis = new THREE.Vector3().subVectors( curvePoints[ i + 1 ], curvePoints[ i ] ).normalize();
+          //direction of point displacement
+          var displacement = new THREE.Vector3( 0.0, 0.5, 0.5 ).normalize();
+          //calculate quaternion for the rotation around custom axis
+          var quaternion = new THREE.Quaternion();
+          quaternion.setFromAxisAngle( axis, radians );
+          displacement.applyQuaternion( quaternion );
+          //add original point position to preserve shape
+          displacement.add( curvePoints[ i ] );
+          //scale the displaced point along the direction vector to original curvePoint
+          var dir = new THREE.Vector3().subVectors( displacement, curvePoints[ i ] ).normalize();
+          displacement.add( dir.multiplyScalar( 3 ) );
+          //add to vertices buffer
+          vertices[ 3 * i ] = displacement.x;
+          vertices[ 3 * i + 1 ] = displacement.y;
+          vertices[ 3 * i + 2 ] = displacement.z;
+
+          //increment rotation value
+          radians += 0.3;
+        }
+        //add position attribute to the pointsGeometry
+        pointsGeometry.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+        //add the point field to the scene
+        var pointsMaterial = new THREE.PointsMaterial( { color: 0x888888 } );
+        pointField = new THREE.Points( pointsGeometry, pointsMaterial );
+        scene.add( pointField );
+      }
+
+      //parameters for animation
+      var nEnd = 0;
+      var nStep = 1;
+
+      var animate = function () {
+        controls.update();
+        var nMax = pointField.geometry.attributes.position.count;
+        nEnd = Math.min( nEnd + nStep, nMax );
+        //update draw range for animation
+        pointField.geometry.setDrawRange(0, nEnd)
+        requestAnimationFrame( animate );
+        renderer.render(scene, camera);
+      };
+
+      init ();
+      animate();
+      
+    </script>
+  </body>
+</html>
