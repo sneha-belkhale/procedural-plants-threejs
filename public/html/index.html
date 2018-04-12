@@ -11,6 +11,8 @@
 
   <body>
     <script>
+
+
       var scene, camera, controls, renderer;
       var points, pointField;
       var spike, spikeList;
@@ -19,22 +21,32 @@
         scene = new THREE.Scene();
         //initialize camera
         camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
-        camera.position.z = 20;
+        camera.position.z = 77;
+
         //set up orbit controls on the camera
         controls = new THREE.OrbitControls( camera );
         //initialize renderer
-        renderer = new THREE.WebGLRenderer();
+        renderer = new THREE.WebGLRenderer({ antialias: true});
+        renderer.setPixelRatio( window.devicePixelRatio );
+
         renderer.setSize( window.innerWidth, window.innerHeight );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+
         //add renderer to the html page
         document.body.appendChild( renderer.domElement );
 
-        var hemLight = new THREE.HemisphereLight( 0x15fff8, 0x080820, 1 );
+        var hemLight = new THREE.HemisphereLight( 0x00ffec, 0x00ffec, 0.3 );
         scene.add( hemLight );
 
-        var pointLight = new THREE.PointLight( 0xff0000, 1);
-        pointLight.position.set( 50, 50, 50 );
+        var pointLight = new THREE.PointLight( 0x00ffec, 0.8);
         scene.add( pointLight );
+        pointLight.position.set( -100, 100, -10 );
 
+        var pointLight2 = new THREE.PointLight( 0xff00ff, 0.8);
+        pointLight2.position.set( -100, -100, 0 );
+
+        scene.add( pointLight2 );
         spikeList = []
 
         //generate a spike
@@ -74,17 +86,33 @@
 
         //lets first try just making points in a spiral pattern arround a spline
         //create the base curve
+        // var baseCurve = new THREE.CatmullRomCurve3( [
+        // 	new THREE.Vector3( -20, 0, 10 ),
+        // 	new THREE.Vector3( 10, 0, 10 ),
+        // 	new THREE.Vector3( 40, 0, 20 ),
+        //   new THREE.Vector3( 50, 0, 10 ),
+        //   new THREE.Vector3( 80, 0, 20 ),
+        //   new THREE.Vector3( 100, 0, 10 ),
+        //   new THREE.Vector3( 120, 0, 20 ),
+        // ] );
         var baseCurve = new THREE.CatmullRomCurve3( [
-        	new THREE.Vector3( -20, 0, 10 ),
-        	new THREE.Vector3( 10, 0, 10 ),
-        	new THREE.Vector3( 40, 0, 20 ),
-          new THREE.Vector3( 50, 0, 10 ),
-          new THREE.Vector3( 80, 0, 20 ),
-          new THREE.Vector3( 100, 0, 10 ),
-          new THREE.Vector3( 120, 0, 20 ),
-        ] );
+        	new THREE.Vector3( -30, 70,0),
+          new THREE.Vector3( -80, 15,0),
+          new THREE.Vector3( -70, -20,0),
+          new THREE.Vector3( 30, 70,0),
+          new THREE.Vector3( 40, 60,0),
+          new THREE.Vector3( -70, 0,0),
+          new THREE.Vector3( -70, -20,0),
+          new THREE.Vector3( 60, 40,0),
+          new THREE.Vector3( 70, 20,0),
+          new THREE.Vector3( -40, -70,0),
+          new THREE.Vector3( -40, -40,0),
+          new THREE.Vector3( 80, 40,0),
+          new THREE.Vector3( 30, -80,0),
 
-        curvePoints = baseCurve.getPoints( 700 );
+
+        ] );
+        curvePoints = baseCurve.getSpacedPoints( 1500 );
 
         var curveHelperGeo = new THREE.Geometry();
         for ( var i = 0; i < curvePoints.length; i ++ ) {
@@ -93,7 +121,7 @@
 
         var curveHelperMaterial = new THREE.LineBasicMaterial( { color : 0xff0000 } );
         var curveHelper = new THREE.Line( curveHelperGeo, curveHelperMaterial );
-        scene.add( curveHelper );
+        // scene.add( curveHelper );
 
         //rotate the curve points around the curve axis
         var radians = 0.0;
@@ -123,14 +151,19 @@
 
           //add spike and save to list
           var tiltQuaternion = new THREE.Quaternion();
-          var perp = new THREE.Vector3().crossVectors(axis, dir).normalize()
-          tiltQuaternion.setFromAxisAngle( perp , -2.0 );
+          var perp = new THREE.Vector3().crossVectors(axis, dir).normalize();
+          var tiltAngle = 1.0;
+          if( axis.dot( dir ) > 0) {
+            tiltAngle = -1.0;
+          }
+
+          tiltQuaternion.setFromAxisAngle( perp , tiltAngle );
 
           var spike = new THREE.Mesh(spikeGeometry, new THREE.MeshPhongMaterial());
           //individual tilt rotation
-          spike.rotateY(-1.0)
-          spike.rotateZ(2.0)
-          spike.rotateY(-2.0)
+          spike.rotateZ(-1.0)
+          spike.rotateY(3.14)
+
 
           var spikeScale = 10;
           //set position to our skeleton point and scale
@@ -153,15 +186,28 @@
 
       //parameters for animation
       var nEnd = 0;
-      var nStep = 1;
+      var nStep = 3;
+      function onWindowResize(){
 
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+
+          renderer.setSize( window.innerWidth, window.innerHeight );
+
+      }
       var animate = function () {
         controls.update();
         var nMax = pointField.geometry.attributes.position.count;
         nEnd = Math.min( nEnd + nStep, nMax );
         //update draw range for animation
-        pointField.geometry.setDrawRange(0, nEnd)
-        scene.add(spikeList[nEnd])
+        pointField.geometry.setDrawRange(0, 0)
+
+        if ( nMax - nEnd > nStep ) {
+          for ( var i = 0; i < nStep; i++ ) {
+            scene.add( spikeList[ nEnd + i ] );
+          }
+        }
+
         requestAnimationFrame( animate );
         renderer.render(scene, camera);
       };
