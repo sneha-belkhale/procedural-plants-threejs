@@ -1,0 +1,690 @@
+<html>
+  <head>
+    <title>three.js empty template</title>
+    <script src="js/THREE/three.min.js"></script>
+    <script src="js/THREE/FBXLoader.js"></script>
+    <script src="js/THREE/OrbitControls.js"></script>
+    <style>
+      body { margin: 0; }
+    </style>
+  </head>
+
+  <body>
+    <script id="spikeVertexShader" type="x-shader/x-vertex">
+
+      varying vec3 vPos;
+      varying vec3 vInitPos;
+      varying vec3 vNewPos;
+
+      varying vec3 vNormal;
+      varying vec2 vUv;
+      varying vec3 vColor;
+      varying float vColorIndic;
+
+      uniform float timeDelta;
+      uniform float growing;
+      // attribute vec3 color;
+      // attribute float colorIndic;
+      mat3 rotationMatrix(vec3 axis, float angle)
+      {
+          axis = normalize(axis);
+          float s = sin(angle);
+          float c = cos(angle);
+          float oc = 1.0 - c;
+
+          return mat3(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,
+                      oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,
+                      oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c);
+
+      }
+
+      void main() {
+        vUv = uv;
+        vec3 p = position;
+        vec3 center = vec3(0.0, 0.0, 0.0);
+        float distance = length(center - p);
+        vInitPos = p;
+
+        float angle = sin(timeDelta/200.0) - 0.8;
+        if ( angle < 0.2 ){
+          angle = angle/2.0;
+        }
+        if ( growing > 0.0 ){
+          mat3 openingMat = rotationMatrix( vec3(-1.0, 0.0, 0.0),  growing*angle);
+          p = openingMat * p;
+        } else {
+          p += sin(distance + timeDelta/1000.0)*0.1 * vec3(0.0, -1.0, 1.0);
+        }
+
+
+        vNewPos = (modelMatrix * vec4(p, 1.0)).xyz;
+
+        vec4 modelViewPosition = modelViewMatrix * vec4(p, 1.0);
+        vPos = modelViewPosition.xyz;
+        vNormal = normalMatrix * normal;
+        // vColor = color;
+        gl_Position = projectionMatrix * modelViewPosition;
+      }
+
+    </script>
+
+    <script id="spikeFragmentShader" type="x-shader/x-fragment">
+
+      uniform vec3 diffuse;
+      uniform vec3 specular;
+      uniform float randomness;
+      uniform vec3 accentColor1;
+      uniform vec3 accentColor2;
+
+      varying vec3 vPos;
+      varying vec3 vInitPos;
+      varying vec3 vNewPos;
+      varying vec3 vNormal;
+      // varying vec3 vColor;
+      // varying float vColorIndic;
+
+
+      struct PointLight {
+        vec3 position;
+        vec3 color;
+      };
+
+      uniform PointLight pointLights [NUM_POINT_LIGHTS ];
+
+      float rand(vec2 c){
+      	return fract(sin(dot(c.xy ,vec2(12.9898,78.233))) * 43758.5453);
+      }
+
+      float noise2(vec2 p, float freq ){
+      	float unit = 700.0/freq;
+      	vec2 ij = floor(p/unit);
+      	vec2 xy = mod(p,unit)/unit;
+      	//xy = 3.*xy*xy-2.*xy*xy*xy;
+      	xy = .5*(1.-cos(3.141589*xy));
+      	float a = rand((ij+vec2(0.,0.)));
+      	float b = rand((ij+vec2(1.,0.)));
+      	float c = rand((ij+vec2(0.,1.)));
+      	float d = rand((ij+vec2(1.,1.)));
+      	float x1 = mix(a, b, xy.x);
+      	float x2 = mix(c, d, xy.x);
+      	return mix(x1, x2, xy.y);
+      }
+
+      float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+      float noise(float p){
+      	float fl = floor(p);
+        float fc = fract(p);
+      	return mix(rand(fl), rand(fl + 1.0), fc);
+      }
+
+      vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+      vec3 fade(vec3 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
+
+      float cnoise(vec3 P){
+        vec3 Pi0 = floor(P); // Integer part for indexing
+        vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
+        Pi0 = mod(Pi0, 289.0);
+        Pi1 = mod(Pi1, 289.0);
+        vec3 Pf0 = fract(P); // Fractional part for interpolation
+        vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+        vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+        vec4 iy = vec4(Pi0.yy, Pi1.yy);
+        vec4 iz0 = Pi0.zzzz;
+        vec4 iz1 = Pi1.zzzz;
+
+        vec4 ixy = permute(permute(ix) + iy);
+        vec4 ixy0 = permute(ixy + iz0);
+        vec4 ixy1 = permute(ixy + iz1);
+
+        vec4 gx0 = ixy0 / 7.0;
+        vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
+        gx0 = fract(gx0);
+        vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+        vec4 sz0 = step(gz0, vec4(0.0));
+        gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+        gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+        vec4 gx1 = ixy1 / 7.0;
+        vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
+        gx1 = fract(gx1);
+        vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+        vec4 sz1 = step(gz1, vec4(0.0));
+        gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+        gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+        vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+        vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+        vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+        vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+        vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+        vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+        vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+        vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+        vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+        g000 *= norm0.x;
+        g010 *= norm0.y;
+        g100 *= norm0.z;
+        g110 *= norm0.w;
+        vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+        g001 *= norm1.x;
+        g011 *= norm1.y;
+        g101 *= norm1.z;
+        g111 *= norm1.w;
+
+        float n000 = dot(g000, Pf0);
+        float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+        float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+        float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+        float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+        float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+        float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+        float n111 = dot(g111, Pf1);
+
+        vec3 fade_xyz = fade(Pf0);
+        vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+        vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+        float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x);
+        return 2.2 * n_xyz;
+      }
+
+      void main() {
+        vec4 addedLights = vec4(0.0, 0.0, 0.0, 1.0);
+
+        vec3 N = normalize (vNormal); //NORMAL
+
+        vec3 V = -vPos; //VIEW VECTOR
+
+        float x = 2.0 * noise2 ( vInitPos.xy + randomness, 30000.0);
+        float y = cnoise (randomness + 100.0 * vInitPos);
+
+
+  			vec4 noiseColor = y * vec4( 0.4,0.4,0.4 , 0.1);
+
+        for(int l = 0; l < NUM_POINT_LIGHTS; l++) {
+          vec3 L = normalize(vPos - pointLights[l].position);
+
+          vec3 R = reflect(-L, N); //REFLECTION FROM LIGHT
+          float dist = distance(vPos, pointLights[l].position);
+          float attenuation = 1.0 / (1.0 + 0.00001*dist);
+          float spec = 2.0*max(0.0, pow(dot(R, normalize(V)), 80.0));
+          addedLights.rgb += attenuation*clamp(dot(-L, N), 0.0, 1.0) * pointLights[l].color;
+          addedLights.rgb += ((1.0-y) * spec * specular);
+        }
+
+
+        float q = 0.0;
+        if (vInitPos.x > 0.1){
+          q = 1.0;
+        }
+        float w = 0.0;
+        if (vInitPos.x < -0.1){
+          w = 1.0;
+        }
+
+        gl_FragColor = 0.4 * addedLights + 0.2 * noiseColor + q * ( vec4( randomness+accentColor1.r, accentColor1.gb, 0.1 ) - x * vec4( 0.3, 0.3, 0.3, 0.3) ) ;
+
+      }
+
+    </script>
+
+    <script>
+
+      function returnRGB(hex){
+          var hex = Math.floor( hex );
+          var r = ( hex >> 16 & 255 ) / 255;
+          var g = ( hex >> 8 & 255 ) / 255;
+          var b = ( hex & 255 ) / 255;
+
+          return [r,g,b];
+      }
+      function SpikeStateMachine ()  {
+        this.state = -1;
+        this.step = 8;
+        this.currentSpikeIndecis= [];
+        for(var i = 0; i< spikeList.length; i++){
+          this.currentSpikeIndecis.push(0);
+        }
+        this.turnOnSpikeGrowth = function () {
+          for ( var i = 0; i < spikeList.length; i++ ){
+            for ( var j = 0; j < this.currentSpikeIndecis[i]; j++ ){
+              spikeList[ i ][ j ].material.uniforms.growing.value = 1;
+            }
+          }
+        }
+        this.update = function( timeDelta, sec )  {
+
+          switch( this.state ) {
+            case 0:
+              //growing outwards
+              if (  sec < 15 ){ this.step = 2;}
+              else {this.step = 0; }
+              for ( var i = 0; i < spikeList.length; i++ ){
+                if ( timeDelta/1500  > i ) {
+                if(this.currentSpikeIndecis[i] + this.step < spikeList[i].length){
+                  for (var j = 0 ; j < this.step; j++){
+                    scene.add(spikeList[i][this.currentSpikeIndecis[i]+j])
+                  }
+                  this.currentSpikeIndecis[i] += this.step;
+                } else {
+                  this.currentSpikeIndecis[i] = spikeList[i].length
+                }
+
+                //turn off the beginning ones...
+                for (var j = 0 ; j < Math.max(0, this.currentSpikeIndecis[i] - 50); j++){
+                  spikeList[i][j].material.uniforms.growing.value = Math.max(spikeList[i][j].material.uniforms.growing.value - 0.1, 0);
+                }
+                curveTubeList[i].geometry.setDrawRange(0, this.currentSpikeIndecis[i]/tubeSpikeScale[i]);
+              }
+              }
+              done = true;
+              for ( var i = 0; i < spikeList.length; i++ ){
+                if(this.currentSpikeIndecis[i] < spikeList[i].length) {
+                  done = false;
+                }
+              }
+              if (done){
+                this.state = -1;
+              }
+
+            break;
+            case 1:
+              //growing inwards
+              if (  sec < 7 ){ this.step = 8;}
+              else {this.step = 8;}
+              for ( var i = 0; i < spikeList.length; i++ ){
+                if(this.currentSpikeIndecis[i] - this.step > -1){
+                  for (var j = 0 ; j < this.step; j++){
+                    scene.remove(spikeList[i][this.currentSpikeIndecis[i]-j])
+                  }
+                  this.currentSpikeIndecis[i] -= this.step;
+                } else if (this.currentSpikeIndecis[i] != -1 ){
+                  while( this.currentSpikeIndecis[i] > -1) {
+                    scene.remove(spikeList[i][this.currentSpikeIndecis[i]])
+                    this.currentSpikeIndecis[i]--;
+                  }
+                } else {
+                  this.currentSpikeIndecis[i] = -1
+                }
+                curveTubeList[i].geometry.setDrawRange(0, this.currentSpikeIndecis[i]/tubeSpikeScale[i])
+              }
+              done = true;
+              for ( var i = 0; i < spikeList.length; i++ ){
+                if(this.currentSpikeIndecis[i] > -1) {
+                  done = false;
+                } else {
+                  //turn them all off
+                  for ( var j = 0; j < this.currentSpikeIndecis[i]; j++ ){
+                    spikeList[ i ][ j ].material.uniforms.growing.value = 0;
+                  }
+                }
+              }
+              if (done){
+                maryStateMachine.state = 1;
+                this.state = -1;
+              }
+
+            break;
+
+          }
+
+          for ( var i = 0; i < spikeList.length; i++ ){
+            for ( var j = 0; j < this.currentSpikeIndecis[i]; j++ ){
+              spikeList[ i ][ j ].material.uniforms.timeDelta.value = timeDelta;
+            }
+          }
+        }
+      }
+
+      function MaryStateMachine ()  {
+        this.state = -1;
+
+        this.update = function()  {
+
+          switch(this.state){
+            case 0:
+              //mary open eyes
+              if( mary.morphTargetInfluences[0] < 0.9){
+                mary.morphTargetInfluences[0] += 0.05;
+              } else {
+                this.state = -1;
+                spikeStateMachine.state = 0;
+                spikeStateMachine.turnOnSpikeGrowth();
+              }
+
+            break;
+            case 1:
+              if( mary.morphTargetInfluences[0] > 0){
+                mary.morphTargetInfluences[0] -= 0.05;
+              } else {
+                this.state = -1;
+              }
+            break;
+
+          }
+        }
+      }
+
+      var scene, camera, controls, renderer;
+      var spike, spikeList, spikeStateMachine;
+      var ready, timeDelta, startTime;
+      var mary, maryDone, maryStateMachine;
+      var raycaster, mouse;
+      var wasOnMary = false;
+      var notOnMary = true;
+      function onMouseMove( event ) {
+      	// calculate mouse position in normalized device coordinates
+      	// (-1 to +1) for both components
+      	mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+      	mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+        raycaster.setFromCamera( mouse, camera );
+        var onMary = false;
+        var intersects = raycaster.intersectObjects( scene.children );
+        for ( var i = 0; i < intersects.length; i++ ) {
+          if (intersects[i].object.name == "mary") {
+
+            if (notOnMary){
+              wasOnMary = true;
+              maryStateMachine.state = 0;
+              startTime = Date.now();
+
+              notOnMary = false;
+            }
+            onMary = true;
+          }
+      	}
+        if (!onMary && wasOnMary ){
+          spikeStateMachine.state = 1;
+          spikeStateMachine.turnOnSpikeGrowth();
+          wasOnMary = false;
+          notOnMary = true;
+        }
+      }
+      var init = function () {
+        ready = false;
+        //initialize scene
+        scene = new THREE.Scene();
+        //initialize camera
+        camera = new THREE.PerspectiveCamera( 35, window.innerWidth/window.innerHeight, 0.1, 1000 );
+        camera.position.z = 35;
+
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+        //set up orbit controls on the camera
+        controls = new THREE.OrbitControls( camera );
+        //initialize renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true});
+        renderer.setPixelRatio( window.devicePixelRatio );
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+
+        window.addEventListener( 'resize', onWindowResize, false );
+        window.addEventListener( 'mousemove', onMouseMove, false );
+
+        //add renderer to the html page
+        document.body.appendChild( renderer.domElement );
+
+        var hemLight = new THREE.HemisphereLight( 0xd2bcb6, 0xd2bcb6, 0.3 );
+        // scene.add( hemLight );
+
+        var pointLight = new THREE.PointLight( 0xffffff, 0.8);
+        // scene.add( pointLight );
+        // pointLight.position.set( -200, 200, -10 );
+
+        var pointLight2 = new THREE.PointLight( 0xffffff, 0.8);
+        pointLight2.position.set( 500, 500, 0 );
+        scene.add( pointLight2 );
+
+        var uniform = {
+          diffuse: { type: 'c', value: new THREE.Color( 0xd6aa9b ) },
+          emissive: { type: 'c', value: new THREE.Color( 0x333333 ) },
+          specular: { type: 'c', value: new THREE.Color( 0xFFFFFF ) },
+          shininess: { value: 5},
+          texture: { type: "t", value: 0 },
+          timeDelta: { type: "t", value: 0 },
+          randomness: {type: 'f', value: 98},
+          accentColor1: {type: 'c', value: new THREE.Color( 0xffd349 ) },
+          accentColor2: {type: 'c', value: new THREE.Color( 0x0500a9 ) },
+          accentColor2: {type: 'c', value: new THREE.Color( 0x0500a9 ) },
+          growing: {type: 'f', value: 1}
+        }
+
+        var phongShader = THREE.ShaderLib.phong;
+        var phongUniform = THREE.UniformsUtils.clone(phongShader.uniforms); //copy over the remaining values
+
+        total_uniforms = THREE.UniformsUtils.merge([phongUniform, uniform])
+
+        var spikeMaterial = new THREE.ShaderMaterial({
+          uniforms: total_uniforms,
+          vertexShader: document.getElementById( 'spikeVertexShader' ).textContent,
+          fragmentShader: document.getElementById( 'spikeFragmentShader' ).textContent,
+          lights: true,
+          derivatives: true //so that we can calculate the actual normal at each vertex in the fragment shader
+        });
+
+        //rotate the curve points around the curve axis
+        var radians = 0.0;
+        spikeList = []
+        var loader = new THREE.FBXLoader();
+        loader.load( 'assets/mary.fbx', function ( object ) {
+          var z = 0;
+          object.traverse( function ( child ) {
+            if ( child instanceof THREE.Mesh ) {
+              if ( z > 0 ) {
+                var vertices = child.geometry.attributes.position.array;
+                mary.geometry.morphAttributes.position = [];
+                mary.geometry.morphAttributes.position[0] = new THREE.BufferAttribute(vertices,3);
+                mary.geometry.morphTargets = [];
+                mary.geometry.morphTargets.push(0);
+
+              } else {
+                mary = new THREE.Mesh(child.geometry, new THREE.MeshPhysicalMaterial({
+                  morphTargets: true,
+                  morphNormals: true,
+                  color: new THREE.Color(0xffffff),
+                  roughness: 0.1,
+                  metalness: 0.2
+                }));
+              }
+              z++
+            }
+          });
+          mary.morphTargetInfluences = [0.0]
+          mary.name = "mary";
+          scene.add(mary)
+          maryStateMachine = new MaryStateMachine();
+          maryDone = true;
+
+        }, null, function ( error ) { console.log( error )});
+        fetch ('assets/curves-head.json').then( response => {
+          return response.json();
+        } ).then ( json => {
+          var totalCurvePoints = json[15][1][0][1][7][5]
+          var curveCounts = json[17][0][1][5]
+
+          curveList = [];
+          curveTubeList = [];
+          tubeSpikeScale = [];
+          var index = 0;
+          var curveHelperMaterial = new THREE.LineBasicMaterial( { color : 0xff0000 } );
+
+          for (var i =0; i < curveCounts.length; i++){
+            var curveVertices = [];
+            for (var j = index ; j < index + curveCounts[i]; j++){
+              curveVertices.push( new THREE.Vector3( totalCurvePoints[j][0], totalCurvePoints[j][1], totalCurvePoints[j][2]))
+            }
+            var baseCurve = new THREE.CatmullRomCurve3( curveVertices, false, "chordal" );
+            var curvePoints = baseCurve.getSpacedPoints( curveVertices.length * 15 ); //1500
+            curveList.push( curvePoints)
+
+            var curveHelperGeo = new THREE.Geometry();
+            for ( var q = 0; q < curvePoints.length; q ++ ) {
+              curveHelperGeo.vertices.push( curvePoints[ q ] );
+            }
+
+            var curveHelper = new THREE.TubeGeometry( baseCurve, 30, 0.3, 5, false );
+            var curveHelperBuffer = new THREE.BufferGeometry().fromGeometry( curveHelper );
+            var curveHelperMesh = new THREE.Mesh(curveHelperBuffer , new THREE.MeshPhongMaterial({color: 0x564f4d}));
+            scene.add( curveHelperMesh )
+            curveTubeList.push( curveHelperMesh )
+            curveTubeList[i].geometry.setDrawRange(0, 0)
+
+            index = j;
+          }
+
+          loader.load( 'assets/leaf.fbx', function ( object ) {
+            var z = new THREE.Vector3( 0, 0, 1 );
+            var x = new THREE.Vector3( 1, 0, 0 );
+            object.traverse( function ( child ) {
+              if ( child instanceof THREE.Mesh ) {
+                spikeGeometry = child.geometry;
+                for (var j = 0; j < curveList.length; j++ ){
+                  var curvePoints = curveList[ j ];
+                  spikeList.push([]);
+                  radians = 0;
+                  tubeSpikeScale.push((curvePoints.length-1)/900)
+
+                  for (var i = 0; i < curvePoints.length - 1; i ++ ) {
+                    //axis is the vector between the adjacent curve points
+                    var stemAxis = new THREE.Vector3().subVectors( curvePoints[ i + 1 ], curvePoints[ i ] ).normalize();
+                    //direction of point displacement
+
+                    var displacement = new THREE.Vector3().crossVectors(stemAxis, x).normalize();
+                    //calculate quaternion for the rotation around custom stemAxis
+                    var quaternion = new THREE.Quaternion();
+                    quaternion.setFromAxisAngle( stemAxis, radians + Math.random()/3);
+                    displacement.applyQuaternion( quaternion );
+                    //add original point position to preserve shape
+                    displacement.add( curvePoints[ i ] );
+                    //scale the displaced point along the direction vector to original curvePoint
+                    var dir = new THREE.Vector3().subVectors( displacement, curvePoints[ i ] ).normalize();
+                    displacement.add( dir.multiplyScalar( 0.3 ) );
+
+                    //add new spike at the current position
+                    var spike = new THREE.Mesh(spikeGeometry, spikeMaterial.clone());
+                    spike.material.uniforms.randomness.value = Math.random();
+
+                    var spikeScale = 3;
+                    //set position to our skeleton point and scale
+                    spike.position.set( displacement.x, displacement.y, displacement.z );
+                    //scale the spike according to position
+                    var subtract = 0;
+                    if ( i > curvePoints.length/3 ){
+                      subtract = 3*(i-curvePoints.length/3)/(curvePoints.length/3);
+                    }
+                    // spike.scale.x = 3 + spikeScale - subtract + Math.random();
+                    // spike.scale.y = spikeScale - subtract + Math.random();
+                    // spike.scale.z = spikeScale + Math.random();
+
+                    spike.scale.x = spikeScale + Math.random();
+                    spike.scale.y = spikeScale + Math.random();
+                    spike.scale.z = spikeScale + Math.random();
+
+                    //rotate the spike so it is facing the same direction as stem
+
+                    var spikeUpAxis = new THREE.Vector3( 0, 1, 0 );
+                    var orientStemAngle = Math.acos( stemAxis.dot( spikeUpAxis ) );
+                    var orientSpikeAxis = new THREE.Vector3().crossVectors( spikeUpAxis, stemAxis );
+                    var orientStemQuaternion = new THREE.Quaternion();
+                    orientStemQuaternion.setFromAxisAngle( orientSpikeAxis.normalize(), orientStemAngle);
+                    spike.applyQuaternion( orientStemQuaternion );
+
+                    //rotate the spike so it is facing in towards the stem
+                    var spikeNormal = new THREE.Vector3( 0, 0, -1 ).applyQuaternion( orientStemQuaternion ).normalize();
+                    var spikeDisplacement = new THREE.Vector3().subVectors( curvePoints[i], displacement ).normalize();
+                    var dAngle = Math.acos( spikeDisplacement.dot( spikeNormal ) );
+                    var dAxis = new THREE.Vector3().crossVectors( spikeNormal, spikeDisplacement ).normalize();
+
+                    var orientToCenter = new THREE.Quaternion();
+                    orientToCenter.setFromAxisAngle( dAxis, dAngle);
+                    spike.applyQuaternion( orientToCenter )
+
+                    //tilt the stem outwards like a fan
+                    var tiltQuaternion = new THREE.Quaternion();
+                    var tiltAxis = new THREE.Vector3().crossVectors( stemAxis, dir ).normalize();
+                    // var tiltAngle = 1.0 - i/(3*curvePoints.length) + Math.random()/3;
+                    var tiltAngle = 0.8
+                    tiltQuaternion.setFromAxisAngle( tiltAxis , tiltAngle );
+
+                    spike.applyQuaternion( tiltQuaternion );
+
+
+                    spikeList[j].push(spike)
+
+                    //increment rotation value
+                    radians += 1.1;
+                  }
+                }
+
+                ready = true;
+                startTime = Date.now();
+                spikeStateMachine = new SpikeStateMachine();
+              }
+            });
+          }, null, function(error){console.log(error)} );
+        });
+      }
+
+      //parameters for animation
+      function onWindowResize(){
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+
+          renderer.setSize( window.innerWidth, window.innerHeight );
+
+      }
+
+      var now,delta,then = Date.now();
+      var interval = 1000/30;
+      sec = 0;
+      var animate = function () {
+        now = Date.now();
+        delta = now - then;
+        //update sphere position at 30 frames per second
+        if (delta > interval) {
+          if ( maryDone ){
+            maryStateMachine.update()
+          }
+          if ( ready ) {
+            timeDelta = Date.now() - startTime;
+            spikeStateMachine.update(timeDelta, sec);
+            sec ++;
+            if( sec > 30){
+              sec = 0;
+            }
+          }
+          then = now - (delta % interval);
+        }
+
+        controls.update();
+      //   if (ready) {
+      //
+      //   //
+      //   // var nMax = spikeList.length;
+      //   // nEnd = Math.min( nEnd + nStep, nMax );
+      //   // //update draw range for animation
+      //   // // pointField.geometry.setDrawRange(0, 0)
+      //   //
+      //   // if ( nMax - nEnd > nStep ) {
+      //   //   for ( var i = 0; i < nStep; i++ ) {
+      //   //     scene.add( spikeList[ nEnd + i ] );
+      //   //   }
+      //   // }
+      //   // for ( var i = 0; i < nEnd; i++ ) {
+      //   //   spikeList[ i ].material.uniforms.timeDelta.value = timeDelta;
+      //   // }
+      //
+      //
+      // }
+        requestAnimationFrame( animate );
+        renderer.render(scene, camera);
+      };
+
+      init ();
+      animate();
+
+    </script>
+  </body>
+</html>
