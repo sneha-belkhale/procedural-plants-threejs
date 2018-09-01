@@ -1,5 +1,6 @@
 # procedural-plants-threejs
-Generating interactive plant geometries from scratch with three.js
+Generating nteractive procedural geometry in threejs with gpu animations in the shader to bring some of my 2D drawings to life.
+
 ![Alt text](/screenshots/thumbnail.png?raw=true)
 
 # real time demo
