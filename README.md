@@ -1,5 +1,12 @@
 # procedural-plants-threejs
 Generating interactive plant geometries from scratch with three.js
+![Alt text](/screenshots/thumbnail.png?raw=true)
+
+# real time demo
+https://codercat.tk/auracaria-dreams/
+
+# youtube demo
+https://youtu.be/Yr0eRPHayK0
 
 Run the following commands:
 
